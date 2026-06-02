@@ -101,10 +101,15 @@ BOC.api.createClient = function (fetchFn) {
     return fetchJson(BOC.api._normalizeSubtitleUrl(url));
   }
 
+  function fetchSpaceVideos(uid, opts) {
+    return BOC.api._fetchSpaceVideos(uid, fetchJson, opts);
+  }
+
   return {
     fetchVideoMeta: fetchVideoMeta,
     fetchSubtitleBundle: fetchSubtitleBundle,
-    fetchSubtitleBody: fetchSubtitleBody
+    fetchSubtitleBody: fetchSubtitleBody,
+    fetchSpaceVideos: fetchSpaceVideos
   };
 };
 
@@ -291,6 +296,144 @@ BOC.api.retryAsync = function (task, retries, delayMs) {
   }
 
   return attempt(0);
+};
+
+// --- WBI Signing (for space arc search + future WBI endpoints) ---
+
+BOC.api._WBI_MIXIN_TAB = [
+  46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35,
+  27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 37, 12, 52, 56, 7,
+  0, 39, 42, 13, 16, 48, 57, 51, 34, 1, 20, 44, 6, 54, 22, 55,
+  4, 24, 36, 25, 41, 26, 38, 40, 59, 11, 60, 21, 17, 30, 61, 62
+];
+
+BOC.api._wbiKeyCache = { imgKey: "", subKey: "", expiresAt: 0 };
+
+BOC.api._getMixinKey = function (imgKey, subKey) {
+  var combined = imgKey + subKey;
+  var mixed = "";
+  for (var i = 0; i < BOC.api._WBI_MIXIN_TAB.length; i++) {
+    mixed += combined.charAt(BOC.api._WBI_MIXIN_TAB[i]);
+  }
+  return mixed.substring(0, 32);
+};
+
+/**
+ * Fetch WBI keys from /x/web-interface/nav. Keys rotate daily — cached.
+ */
+BOC.api._fetchWbiKeys = function (fetchFn) {
+  var now = Date.now();
+
+  // Cache hit: reuse keys if not expired (24h TTL)
+  if (BOC.api._wbiKeyCache.imgKey && BOC.api._wbiKeyCache.expiresAt > now) {
+    return Promise.resolve({
+      imgKey: BOC.api._wbiKeyCache.imgKey,
+      subKey: BOC.api._wbiKeyCache.subKey
+    });
+  }
+
+  return fetchFn("https://api.bilibili.com/x/web-interface/nav").then(function (payload) {
+    var data = payload && payload.data;
+    if (!data) { throw new Error("Failed to fetch WBI keys — nav API returned no data"); }
+
+    var wbiImg = data.wbi_img || {};
+    var imgUrl = String(wbiImg.img_url || "");
+    var subUrl = String(wbiImg.sub_url || "");
+
+    var imgKey = imgUrl.split("/").pop().replace(/\.png$/, "");
+    var subKey = subUrl.split("/").pop().replace(/\.png$/, "");
+
+    if (!imgKey || !subKey) { throw new Error("Failed to extract WBI keys from nav response"); }
+
+    BOC.api._wbiKeyCache = {
+      imgKey: imgKey,
+      subKey: subKey,
+      expiresAt: now + 24 * 60 * 60 * 1000
+    };
+
+    return { imgKey: imgKey, subKey: subKey };
+  });
+};
+
+/**
+ * Compute WBI-signed parameters for a given param dict.
+ * Returns a URL query string with w_rid and wts appended.
+ */
+BOC.api._computeWbiSignature = function (params, imgKey, subKey) {
+  var mixinKey = BOC.api._getMixinKey(imgKey, subKey);
+  var wts = String(Math.floor(Date.now() / 1000));
+
+  var allParams = {};
+  Object.keys(params).forEach(function (k) { allParams[k] = params[k]; });
+  allParams.wts = wts;
+
+  // Sort by key
+  var sortedKeys = Object.keys(allParams).sort();
+  var queryParts = [];
+  sortedKeys.forEach(function (k) {
+    var v = String(allParams[k]);
+    // Filter special chars
+    v = v.replace(/[!'()*]/g, "");
+    queryParts.push(encodeURIComponent(k) + "=" + encodeURIComponent(v));
+  });
+  var queryStr = queryParts.join("&");
+
+  var wRid = BOC.utils.md5(queryStr + mixinKey);
+  return queryStr + "&w_rid=" + wRid;
+};
+
+/**
+ * Fetch UP主空间视频列表. Requires WBI signing.
+ *
+ * @param {string} uid - UP主 UID
+ * @param {function} fetchFn - injected fetch transport
+ * @param {object} opts - { order: 'pubdate'|'click'|'stow', count: number, tid: number }
+ * @returns {Promise<Array>} normalized video items
+ */
+BOC.api._fetchSpaceVideos = function (uid, fetchFn, opts) {
+  opts = opts || {};
+  var order = opts.order || "pubdate";
+  var targetCount = Math.min(opts.count || 50, 200);
+  var tid = opts.tid || 0;
+
+  return BOC.api._fetchWbiKeys(fetchFn).then(function (keys) {
+    var allVideos = [];
+    var page = 1;
+    var ps = 30; // max per page
+
+    function fetchPage() {
+      if (allVideos.length >= targetCount) { return Promise.resolve(allVideos.slice(0, targetCount)); }
+
+      var params = {
+        mid: uid,
+        pn: String(page),
+        ps: String(ps),
+        order: order
+      };
+      if (tid > 0) { params.tid = String(tid); }
+
+      var signedQuery = BOC.api._computeWbiSignature(params, keys.imgKey, keys.subKey);
+      var url = "https://api.bilibili.com/x/space/wbi/arc/search?" + signedQuery;
+
+      return fetchFn(url).then(function (payload) {
+        if (payload.code !== 0) {
+          throw new Error(BOC.utils.toReadableText(payload && payload.message, "获取UP主视频列表失败"));
+        }
+        var data = payload.data || {};
+        var list = (data.list && data.list.vlist) || [];
+        allVideos = allVideos.concat(list);
+
+        var hasMore = data.list && data.list.vlist && data.list.vlist.length >= ps;
+        if (hasMore && allVideos.length < targetCount) {
+          page++;
+          return BOC.utils.sleep(300).then(fetchPage);
+        }
+        return allVideos.slice(0, targetCount);
+      });
+    }
+
+    return fetchPage();
+  });
 };
 
 // --- Transport layer ---

@@ -126,7 +126,44 @@
     }
     var uid = match[1];
     state.sourceData = { uid: uid };
-    showSourceStatus("UP主空间来源尚在开发中，请使用收藏夹导入", "error");
+
+    var orderEl = document.getElementById("space-order");
+    var countEl = document.getElementById("space-count");
+    var order = orderEl ? orderEl.value : "pubdate";
+    var count = countEl ? Math.min(parseInt(countEl.value, 10) || 50, 200) : 50;
+
+    showSourceStatus("正在获取UP主视频列表...", "loading");
+
+    state.apiClient.fetchSpaceVideos(uid, { order: order, count: count })
+      .then(function (videos) {
+        state.allVideos = videos.map(function (item) {
+          return {
+            bvid: item.bvid || "",
+            aid: String(item.aid || ""),
+            title: item.title || "",
+            author: item.author || "",
+            duration: item.length ? parseDuration(item.length) : 0,
+            uploadDate: item.created ? BOC.utils.formatLocalDate(Number(item.created) * 1000) : "",
+            playCount: Number(item.play || 0),
+            source: "UP主空间",
+            sourceType: "space"
+          };
+        });
+        showSourceStatus("UP主空间: 找到 " + state.allVideos.length + " 个视频", "success");
+        enableNextStep();
+      })
+      .catch(function (error) {
+        showSourceStatus("获取失败: " + BOC.utils.getErrorMessage(error) + "（请确认UID正确，且视频可公开访问）", "error");
+      });
+  }
+
+  // B站API时长格式: "mm:ss" or "hh:mm:ss"
+  function parseDuration(val) {
+    if (!val) { return 0; }
+    var parts = String(val).split(":").map(Number);
+    if (parts.length === 2) { return parts[0] * 60 + parts[1]; }
+    if (parts.length === 3) { return parts[0] * 3600 + parts[1] * 60 + parts[2]; }
+    return 0;
   }
 
   function resolveManualSource() {
@@ -483,7 +520,16 @@
       detail.innerHTML =
         '<label>UP主主页链接 或 UID</label>' +
         '<input type="text" id="source-input" placeholder="https://space.bilibili.com/243917657" />' +
-        '<p style="color:#888;font-size:12px;margin-top:4px;">尚在开发中，请使用收藏夹导入</p>' +
+        '<div class="space-options" style="display:flex;gap:12px;margin-top:12px;">' +
+        '<div style="flex:1"><label style="font-size:13px;color:#888;">排序</label>' +
+        '<select id="space-order" class="filter-number" style="width:100%;background:#0f3460;border:1px solid #333;border-radius:6px;color:#e0e0e0;padding:8px;">' +
+        '<option value="pubdate">最新发布</option>' +
+        '<option value="click">最多播放</option>' +
+        '<option value="stow">最多收藏</option>' +
+        '</select></div>' +
+        '<div style="flex:1"><label style="font-size:13px;color:#888;">数量</label>' +
+        '<input type="number" id="space-count" class="filter-number" style="width:100%;" value="50" min="1" max="200" />' +
+        '</div></div>' +
         '<button id="source-resolve-btn" class="btn-primary" style="margin-top:8px;">获取视频列表</button>';
     } else if (preset === "manual") {
       detail.innerHTML =
