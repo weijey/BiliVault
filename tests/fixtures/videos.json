@@ -1,0 +1,14 @@
+[
+  {
+    "name": "has-subtitle-cc-zh",
+    "url": "https://www.bilibili.com/video/BV15bGv6WEPu",
+    "title": "confirmed video with CC subtitle",
+    "expectSubtitle": true
+  },
+  {
+    "name": "no-subtitle",
+    "url": "https://www.bilibili.com/video/BV1xx411c7mD",
+    "title": "video without subtitle",
+    "expectSubtitle": false
+  }
+]

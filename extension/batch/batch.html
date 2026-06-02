@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BiliVault — 批量知识摄取</title>
+  <link rel="stylesheet" href="./batch.css" />
+</head>
+<body>
+  <main class="batch-container">
+    <header class="batch-header">
+      <h1>BiliVault 批量摄取</h1>
+      <p class="batch-subtitle">从 B站 抓取字幕 → Obsidian 知识库 raw/ 层</p>
+    </header>
+
+    <!-- Environment readiness banner -->
+    <div id="env-banner" class="env-banner" hidden></div>
+
+    <!-- Step 1: Source Selection -->
+    <section id="step-source" class="batch-step active">
+      <h2>Step 1: 选择来源</h2>
+      <div class="source-presets">
+        <button class="preset-card" data-preset="favorite">
+          <span class="preset-icon">收藏夹</span>
+          <strong>从收藏夹导入</strong>
+          <small>粘贴收藏夹链接，一键识别</small>
+        </button>
+        <button class="preset-card" data-preset="space">
+          <span class="preset-icon">UP主</span>
+          <strong>从UP主空间导入</strong>
+          <small>粘贴UP主主页链接</small>
+        </button>
+        <button class="preset-card" data-preset="manual">
+          <span class="preset-icon">手动</span>
+          <strong>手动输入BV号</strong>
+          <small>精确控制，一行一个</small>
+        </button>
+      </div>
+      <div id="source-detail" class="source-detail" hidden></div>
+      <div id="source-status" class="source-status" hidden></div>
+      <div class="step-actions">
+        <button id="source-next-btn" class="btn-primary" disabled>下一步：设置筛选</button>
+      </div>
+    </section>
+
+    <!-- Step 2: Filter Pipeline -->
+    <section id="step-filter" class="batch-step">
+      <h2>Step 2: 筛选条件</h2>
+      <div class="filter-stages">
+        <div class="filter-stage">
+          <label class="filter-toggle">
+            <input type="checkbox" id="filter-subtitle" checked />
+            <strong>Stage 0: 字幕前置条件</strong>
+          </label>
+          <div class="filter-options">
+            <label><input type="checkbox" class="sub-filter" data-parent="filter-subtitle" id="filter-cc-only" /> 仅人工CC字幕（跳过AI生成）</label>
+            <label><input type="checkbox" class="sub-filter" data-parent="filter-subtitle" id="filter-zh-first" checked /> 首选中文，无中文时降级英文</label>
+          </div>
+        </div>
+
+        <div class="filter-stage">
+          <label class="filter-toggle">
+            <input type="checkbox" id="filter-dedup" checked />
+            <strong>Stage 1: 去重</strong>
+          </label>
+          <div class="filter-options">
+            <p class="filter-hint">自动跳过已存在于 Obsidian raw/ 目录中的视频（按 BV 号检查）</p>
+          </div>
+        </div>
+
+        <div class="filter-stage">
+          <label class="filter-toggle">
+            <input type="checkbox" id="filter-duration" />
+            <strong>Stage 2: 时长范围</strong>
+          </label>
+          <div class="filter-options">
+            <input type="number" id="duration-min" value="2" min="0" class="filter-number" /> 分钟 ~
+            <input type="number" id="duration-max" value="180" min="0" class="filter-number" /> 分钟
+          </div>
+        </div>
+
+        <div class="filter-stage">
+          <label class="filter-toggle">
+            <input type="checkbox" id="filter-keyword" />
+            <strong>Stage 3: 标题关键词</strong>
+          </label>
+          <div class="filter-options">
+            <input type="text" id="keyword-include" placeholder="包含关键词（逗号分隔）" class="filter-text" />
+            <input type="text" id="keyword-exclude" placeholder="排除关键词（逗号分隔）" class="filter-text" />
+          </div>
+        </div>
+
+        <div class="filter-stage">
+          <label class="filter-toggle">
+            <input type="checkbox" id="filter-daterange" />
+            <strong>Stage 4: 发布时间</strong>
+          </label>
+          <div class="filter-options">
+            <select id="date-range-select">
+              <option value="1">最近 1 个月</option>
+              <option value="3">最近 3 个月</option>
+              <option value="6" selected>最近 6 个月</option>
+              <option value="12">最近 1 年</option>
+              <option value="0">不限</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-summary" id="filter-summary" hidden>
+        <strong>实时统计</strong>
+        <div id="filter-stats"></div>
+      </div>
+      <div class="step-actions">
+        <button id="filter-back-btn" class="btn-secondary">上一步</button>
+        <button id="filter-next-btn" class="btn-primary" disabled>预览视频列表</button>
+      </div>
+    </section>
+
+    <!-- Step 3: Preview & Confirm -->
+    <section id="step-preview" class="batch-step">
+      <h2>Step 3: 预览 & 确认</h2>
+      <div id="preview-summary"></div>
+      <div id="preview-list" class="preview-list"></div>
+      <div class="step-actions">
+        <button id="preview-back-btn" class="btn-secondary">上一步</button>
+        <button id="preview-start-btn" class="btn-primary">开始批量抓取</button>
+      </div>
+    </section>
+
+    <!-- Step 4: Execution & Progress -->
+    <section id="step-execute" class="batch-step">
+      <h2>Step 4: 执行中</h2>
+      <div class="progress-bar-container">
+        <div id="progress-bar" class="progress-bar"></div>
+      </div>
+      <div id="progress-stats"></div>
+      <div id="progress-log" class="progress-log"></div>
+      <div class="step-actions">
+        <button id="execute-pause-btn" class="btn-secondary">暂停</button>
+        <button id="execute-stop-btn" class="btn-danger">停止</button>
+      </div>
+    </section>
+
+    <!-- Step 5: Completion Report -->
+    <section id="step-complete" class="batch-step">
+      <h2>Step 5: 完成报告</h2>
+      <div id="complete-report"></div>
+      <div id="compilation-gap" class="compilation-gap" hidden></div>
+      <div class="step-actions">
+        <button id="complete-retry-btn" class="btn-secondary">重试失败项</button>
+        <button id="complete-close-btn" class="btn-primary">关闭</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="../core/utils.js"></script>
+  <script src="../core/bilibili-api.js"></script>
+  <script src="../core/subtitle-fetcher.js"></script>
+  <script src="../core/markdown-builder.js"></script>
+  <script src="../core/obsidian-client.js"></script>
+  <script src="../core/subtitle-cache.js"></script>
+  <script src="./batch.js"></script>
+</body>
+</html>
