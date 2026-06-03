@@ -70,7 +70,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     const fetchOptions = {
       method: "GET",
-      credentials: isBiliRequest ? "omit" : "include",
+      credentials: "include",
       cache: "no-store",
       headers: headers
     };
@@ -100,6 +100,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     if (/space/.test(url)) {
       // Space API needs explicit cookie injection due to SameSite
+      // Temporarily switch to omit since we manually set Cookie header
+      fetchOptions.credentials = "omit";
       chrome.cookies.getAll({}, (allCookies) => {
         if (!chrome.runtime.lastError) {
           const biliCookies = allCookies.filter(c => {
