@@ -98,27 +98,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((error) => sendResponse({ ok: false, error: error.message }));
     }
 
-    if (/space/.test(url)) {
-      // Space API needs explicit cookie injection due to SameSite
-      // Temporarily switch to omit since we manually set Cookie header
-      fetchOptions.credentials = "omit";
-      chrome.cookies.getAll({}, (allCookies) => {
-        if (!chrome.runtime.lastError) {
-          const biliCookies = allCookies.filter(c => {
-            const d = c.domain;
-            return d.includes("bilibili") || d.includes("hdslb");
-          });
-          const cookieStr = biliCookies.map(c => c.name + "=" + c.value).join("; ");
-          if (cookieStr) {
-            fetchOptions.headers.set("Cookie", cookieStr);
-            fetchOptions.credentials = "omit";
-          }
-        }
-        doRequest();
-      });
-    } else {
-      doRequest();
-    }
+    doRequest();
     return true;
   }
 

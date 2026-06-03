@@ -11,7 +11,7 @@
     }
   },
 
-  "permissions": ["storage", "scripting", "cookies"],
+  "permissions": ["storage", "scripting"],
   "host_permissions": [
     "https://*.bilibili.com/*",
     "https://api.bilibili.com/*",
