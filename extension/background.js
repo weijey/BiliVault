@@ -70,7 +70,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     const fetchOptions = {
       method: "GET",
-      credentials: "include",
+      credentials: isBiliRequest ? "omit" : "include",
       cache: "no-store",
       headers: headers
     };
@@ -98,8 +98,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((error) => sendResponse({ ok: false, error: error.message }));
     }
 
-    // Always do request — credentials: "include" sends B站 cookies
-    doRequest();
+    if (isBiliRequest) {
+      chrome.cookies.getAll({ domain: ".bilibili.com" }, (cookies1) => {
+        chrome.cookies.getAll({ domain: ".hdslb.com" }, (cookies2) => {
+          const all = (cookies1 || []).concat(cookies2 || []);
+          const cookieStr = all.map(c => c.name + "=" + c.value).join("; ");
+          if (cookieStr) { fetchOptions.headers.set("Cookie", cookieStr); }
+          doRequest();
+        });
+      });
+    } else {
+      doRequest();
+    }
     return true;
   }
 
