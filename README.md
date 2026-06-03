@@ -1,64 +1,78 @@
-# Bilibili Obsidian Clipper｜一键保存B站字幕
+# BiliVault — B站视频字幕 → Obsidian 知识库摄取系统
 
-[![Ask Zread](https://img.shields.io/badge/Ask%20Zread-00b0aa?style=flat-square)](https://zread.ai/haixiong1997/Bilibili-Obsidian-Clipper) [![GitHub all releases downloads](https://img.shields.io/github/downloads/haixiong1997/Bilibili-Obsidian-Clipper/total?style=flat-square)](https://github.com/haixiong1997/Bilibili-Obsidian-Clipper/releases)
-
-推荐官方插件市场下载：[Chrome](https://chromewebstore.google.com/detail/jokophbofiphenlplmohabdcmalcbenl?utm_source=item-share-cb) · [Edge](https://microsoftedge.microsoft.com/addons/detail/fbeeapnjdjgacilaobonekidbfjcmdjo) · [Firefox](https://addons.mozilla.org/addon/bilibili-obsidian-clipper/)
-
-在 B 站视频页抓取字幕，预览后可复制 Markdown、下载字幕文件，并一键写入 Obsidian（Local REST API）。
-
-> 注意：仅支持获取“有字幕轨”的 B 站视频字幕（播放器里有「字幕」选项，通常表示作者上传了外挂字幕或平台提供了 AI 字幕）；没有字幕轨的视频无法获取字幕。
+Chrome MV3 扩展。从 B站 抓取视频字幕，输出结构化 Markdown 到 Obsidian，为 LLM 知识库编译做准备。
 
 ## 功能
 
-- B 站视频字幕抓取（自动识别当前分 P）
-- 字幕预览、复制 Markdown
-- 下载字幕文件（`srt/txt`）
-- 保存到 Obsidian（Local REST API）
+**单视频**
+- B站视频页一键抓取字幕（自动识别分P）
+- 字幕预览、复制 Markdown、下载 SRT/TXT
+- 一键写入 Obsidian（Local REST API）
 
-## 功能图片演示
+**批量摄取**
+- 收藏夹导入（支持 medialist 和 favlist URL 格式，自动分页）
+- UP主空间导入（排序：最新/最多播放/最多收藏，数量可调）
+- 手动 BV 号列表导入
+- 筛选管道：字幕类型 → 去重 → 时长 → 关键词 → 发布时间
+- 串行队列消费（自动限速、错误恢复、进度持久化）
+- 完成报告 + 知识库编译缺口提醒
 
-![Bilibili Obsidian Clipper 功能演示](docs/images/feature-demo-v2.png)
+**架构**
+- `core/` 共享库：B站API (fetchFn 依赖注入)、字幕解析、Markdown 生成、WBI签名 (MD5)
+- `batch/` 批量摄取独立页面（5步流程）
+- 24 个 Playwright 浏览器集成测试
 
-## 安装方式
+## 安装
 
-### Chrome / Edge
-
-1. 在 GitHub 的 `Releases` 页面下载最新的 `*-chrome.zip` 包
-2. 解压到任意本地目录
-3. 打开扩展管理页：
-   - Chrome：`chrome://extensions/`
-   - Edge：`edge://extensions/`
-4. 开启"开发者模式"
-5. 点击"加载已解压的扩展程序"
-6. 选择解压后的扩展目录
-
-### Firefox
-
-1. 在 GitHub 的 `Releases` 页面下载最新的 `*-firefox.zip` 包
-2. 解压到任意本地目录
-3. 打开 Firefox 附加组件管理页：`about:addons`
-4. 点击右上角齿轮图标 → "调试附加组件"
-5. 点击"临时加载附加组件..."
-6. 选择解压后的文件夹中的 `manifest.json` 文件
-
-## 项目结构
-
-- `README.md` / `LICENSE`：项目说明与许可证
-- `extension/`：插件源码（manifest、js、css、icons）
+1. `git clone` 或下载 ZIP 解压
+2. Chrome → `chrome://extensions` → 开启「开发者模式」
+3. 「加载已解压的扩展程序」→ 选择 `extension/` 目录
+4. 右键扩展图标 → 选项 → 填写 Obsidian Local REST API 信息
 
 ## Obsidian 配置
 
-1. 在 Obsidian 社区插件市场安装并启用 `Local REST API with MCP`
-2. 在插件设置中勾选 `Enable Non-encrypted (HTTP) Server`
-3. 复制插件页面里的 API Key
-4. 在扩展设置页填写 `Local REST API 地址`、`API Key`、`笔记目录`
+1. 安装 `Local REST API with MCP` 插件
+2. 勾选 `Enable Non-encrypted (HTTP) Server`
+3. 复制 API Key → 填入扩展设置页
+4. 点击「测试连接」确认连通
 
-## 使用方式
+## 使用
 
-1. 打开任意 B 站视频页并点击扩展图标
-2. 面板会自动抓取并展示字幕
-3. 按需点击 `刷新 / 复制 / 下载 / 保存到 Obsidian`
+**单视频**：打开 B站视频页 → 点击扩展图标 → 刷新抓取 → 复制/下载/写入 Obsidian
 
-## 视频教程
+**批量**：点击扩展图标 → 批量抓取 → 选择来源 → 筛选 → 预览 → 执行
 
-- [B 站教程](https://www.bilibili.com/video/BV15qQwB4EZ9/?spm_id_from=333.1387.homepage.video_card.click&vd_source=040bc5ea7866b419558ec2682a2ccb59)
+## 项目结构
+
+```
+extension/
+├── core/           # 纯逻辑，BOC.* 命名空间
+│   ├── utils.js        # 格式化、MD5、结构化日志
+│   ├── bilibili-api.js # B站 API (fetchFn 注入)
+│   ├── subtitle-fetcher.js  # 字幕排序/解析/校验
+│   ├── markdown-builder.js  # Markdown/SRT/TXT 生成
+│   ├── obsidian-client.js   # Obsidian API
+│   └── subtitle-cache.js    # chrome.storage 缓存
+├── content/        # 视频页 UI 壳
+├── batch/          # 批量摄取独立页
+├── popup/          # 弹出面板
+├── options/        # 设置页
+├── background.js   # Service Worker
+└── manifest.json
+tests/              # Playwright 集成测试
+docs/               # 设计文档、实现计划
+```
+
+## 设计理念
+
+遵循 [Karpathy LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 的三层架构：
+
+- **raw/** ← BiliVault 输出的 Markdown 源文件
+- **wiki/** ← LLM 编译后的结构化知识
+- **CLAUDE.md** ← 知识库组织规则
+
+不只是一个下载器——是知识摄取管道的入口。
+
+## License
+
+MIT
