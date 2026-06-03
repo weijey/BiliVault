@@ -181,7 +181,9 @@
 
     showSourceStatus("正在获取UP主视频列表...", "loading");
 
-    state.apiClient.fetchSpaceVideos(uid, { order: order, count: count })
+    // Use chrome.scripting to execute the API call in a B站 page context
+    // where cookies are available, bypassing Service Worker SameSite restrictions.
+    fetchSpaceVideosViaPageContext(uid, order, count)
       .then(function (videos) {
         state.allVideos = videos.map(function (item) {
           return {
@@ -204,6 +206,85 @@
         console.error("[BiliVault] Space API error:", raw);
         showSourceStatus("获取失败: " + raw.substring(0, 200), "error");
       });
+  }
+
+  // Fetch space videos by running the API call in a B站 page context (which has cookies)
+  function fetchSpaceVideosViaPageContext(uid, order, count) {
+    // First get WBI keys via existing extension infra
+    return BOC.api._fetchWbiKeys(BOC.api._chromeFetch).then(function (keys) {
+      var allVideos = [];
+      var ps = 30;
+      var targetCount = count;
+
+      function fetchPageWbi(page) {
+        // Compute signed URL in extension context
+        var params = { mid: uid, pn: String(page), ps: String(ps), order: order, platform: "web" };
+        var signedQuery = BOC.api._computeWbiSignature(params, keys.imgKey, keys.subKey);
+        var apiUrl = "https://api.bilibili.com/x/space/wbi/arc/search?" + signedQuery;
+
+        // Find a B站 tab and execute the fetch there
+        return executeFetchInBiliTab(apiUrl).then(function (payload) {
+          if (payload.code !== 0) {
+            throw new Error(BOC.utils.toReadableText(payload && payload.message, "code:" + payload.code));
+          }
+          var data = payload.data || {};
+          var list = (data.list && data.list.vlist) || [];
+          allVideos = allVideos.concat(list);
+
+          var hasMore = list.length >= ps;
+          if (hasMore && allVideos.length < targetCount) {
+            return BOC.utils.sleep(300).then(function () { return fetchPageWbi(page + 1); });
+          }
+          return allVideos.slice(0, targetCount);
+        });
+      }
+
+      return fetchPageWbi(1);
+    });
+  }
+
+  function executeFetchInBiliTab(apiUrl) {
+    return new Promise(function (resolve, reject) {
+      // Find a tab on bilibili.com
+      chrome.tabs.query({ url: "*://*.bilibili.com/*" }, function (tabs) {
+        var doFetch = function (tabId) {
+          chrome.scripting.executeScript(
+            {
+              target: { tabId: tabId },
+              func: function (url) {
+                return fetch(url, { credentials: "include" }).then(function (r) { return r.json(); });
+              },
+              args: [apiUrl],
+            },
+            function (results) {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+                return;
+              }
+              if (results && results[0] && results[0].result) {
+                resolve(results[0].result);
+              } else {
+                reject(new Error("No result from page context"));
+              }
+            }
+          );
+        };
+
+        if (tabs.length > 0) {
+          doFetch(tabs[0].id);
+        } else {
+          // Open a B站 page to get a context with cookies
+          chrome.tabs.create({ url: "https://www.bilibili.com/", active: false }, function (tab) {
+            // Wait for page to load
+            setTimeout(function () {
+              doFetch(tab.id);
+              // Close the helper tab
+              setTimeout(function () { chrome.tabs.remove(tab.id).catch(function () {}); }, 1000);
+            }, 3000);
+          });
+        }
+      });
+    });
   }
 
   // B站API时长格式: "mm:ss" or "hh:mm:ss"
