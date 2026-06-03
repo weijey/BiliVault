@@ -1,5 +1,5 @@
-// Bilibili Obsidian Clipper — Content Script (UI Shell)
-// Phase A: delegates business logic to BOC.* core modules.
+// BiliVault — Content Script (UI Shell)
+// delegates business logic to BOC.* core modules.
 
 (function () {
   if (window.__boc_content_loaded) { return; }

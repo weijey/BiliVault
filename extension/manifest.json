@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Bilibili Obsidian Clipper｜一键保存B站字幕",
+  "name": "BiliVault",
   "version": "2.0.0",
-  "description": "在 B 站视频页抓取字幕，预览后一键保存到 Obsidian。支持批量抓取。",
+  "description": "B站视频字幕 → Obsidian 知识库摄取。单视频+批量收藏夹+UP主空间。",
 
   "browser_specific_settings": {
     "gecko": {
-      "id": "bilibili-obsidian-clipper@github.com",
+      "id": "bilivault@weijey.dev",
       "strict_min_version": "109.0"
     }
   },
@@ -52,7 +52,7 @@
     }
   ],
   "action": {
-    "default_title": "Bilibili Obsidian Clipper",
+    "default_title": "BiliVault",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"

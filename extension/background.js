@@ -1,4 +1,4 @@
-// Bilibili Obsidian Clipper — Service Worker
+// BiliVault — Service Worker
 // Phase A: load core dependencies via importScripts
 
 try {
