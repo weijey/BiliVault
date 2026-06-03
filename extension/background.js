@@ -98,25 +98,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((error) => sendResponse({ ok: false, error: error.message }));
     }
 
-    if (isBiliRequest) {
-      // Try multiple domain patterns to find all B站 cookies
+    if (/space/.test(url)) {
+      // Space API needs explicit cookie injection due to SameSite
       chrome.cookies.getAll({}, (allCookies) => {
-        if (chrome.runtime.lastError) {
-          console.warn("[BiliVault] cookies API failed:", chrome.runtime.lastError.message);
-          doRequest();
-          return;
-        }
-        // Filter for B站-related cookies by domain
-        const biliCookies = allCookies.filter(c => {
-          const d = c.domain;
-          return d.includes("bilibili") || d.includes("hdslb");
-        });
-        console.log("[BiliVault] total cookies:", allCookies.length, "bili cookies:", biliCookies.length,
-          biliCookies.map(c => c.name + "@" + c.domain).join(", "));
-        const cookieStr = biliCookies.map(c => c.name + "=" + c.value).join("; ");
-        if (cookieStr) {
-          fetchOptions.headers.set("Cookie", cookieStr);
-          fetchOptions.credentials = "omit";
+        if (!chrome.runtime.lastError) {
+          const biliCookies = allCookies.filter(c => {
+            const d = c.domain;
+            return d.includes("bilibili") || d.includes("hdslb");
+          });
+          const cookieStr = biliCookies.map(c => c.name + "=" + c.value).join("; ");
+          if (cookieStr) {
+            fetchOptions.headers.set("Cookie", cookieStr);
+            fetchOptions.credentials = "omit";
+          }
         }
         doRequest();
       });
