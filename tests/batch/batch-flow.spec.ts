@@ -49,7 +49,7 @@ test.beforeEach(() => {
 async function openBatchPage(): Promise<Page> {
   const page = await context.newPage();
   await page.goto(
-    `chrome-extension://${extensionId}/batch/batch.html`,
+    `chrome-extension://${extensionId}/pages/batch/batch.html`,
     { waitUntil: "domcontentloaded" }
   );
   await page.waitForTimeout(1500); // let env check complete

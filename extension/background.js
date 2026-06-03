@@ -51,7 +51,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === "open-options") {
-    chrome.tabs.create({ url: chrome.runtime.getURL("options/options.html") })
+    chrome.tabs.create({ url: chrome.runtime.getURL("pages/options/options.html") })
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;

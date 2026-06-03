@@ -68,7 +68,7 @@ export async function configureMockObsidian(
 ): Promise<void> {
   const optsPage = await context.newPage();
   await optsPage.goto(
-    `chrome-extension://${extensionId}/options/options.html`,
+    `chrome-extension://${extensionId}/pages/options/options.html`,
     { waitUntil: "domcontentloaded" }
   );
 

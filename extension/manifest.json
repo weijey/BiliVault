@@ -30,7 +30,7 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "options_page": "options/options.html",
+  "options_page": "pages/options/options.html",
   "content_scripts": [
     {
       "matches": [
@@ -57,11 +57,11 @@
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"
     },
-    "default_popup": "popup/popup.html"
+    "default_popup": "pages/popup/popup.html"
   },
   "web_accessible_resources": [
     {
-      "resources": ["batch/batch.html", "batch/batch.js", "batch/batch.css"],
+      "resources": ["pages/batch/batch.html", "pages/batch/batch.js", "pages/batch/batch.css"],
       "matches": ["https://www.bilibili.com/*"]
     }
   ]

@@ -4,6 +4,9 @@ release/
 AGENTS.md
 PRIVACY_POLICY_zh-CN.md
 WEBSTORE_LISTING_zh-CN.md
+*.zip
+sync-to-desktop.sh
 tests/node_modules/
 tests/playwright-report/
 tests/test-results/
+test-results/

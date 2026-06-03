@@ -109,7 +109,7 @@ function bindEvents() {
   });
 
   el.batchBtn.addEventListener("click", async () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL("batch/batch.html") });
+    chrome.tabs.create({ url: chrome.runtime.getURL("pages/batch/batch.html") });
   });
 }
 
