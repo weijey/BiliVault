@@ -31,30 +31,27 @@
       state.settings = settings;
       BOC.utils.setDebugEnabled(settings.enableDebugLogs);
       state.apiClient = BOC.api.createClient(BOC.api._chromeFetch);
+      state.obsidianAvailable = !!(settings.obsidianApiBaseUrl && settings.obsidianApiKey);
 
-      var issues = [];
-      if (!settings.obsidianApiBaseUrl || !settings.obsidianApiKey) {
-        issues.push("Obsidian Local REST API 未配置");
-      }
-      if (issues.length > 0) {
+      if (state.obsidianAvailable) {
+        BOC.obsidian.testConnection(
+          chrome.runtime.sendMessage.bind(chrome.runtime),
+          settings.obsidianApiBaseUrl,
+          settings.obsidianApiKey
+        ).then(function () {
+          banner.removeAttribute("hidden");
+          banner.className = "env-banner ok";
+          banner.textContent = "Obsidian 连接正常 | " + settings.noteFolder;
+        }).catch(function () {
+          banner.removeAttribute("hidden");
+          banner.className = "env-banner";
+          banner.textContent = "Obsidian 连接失败 — 抓取后可选择下载 | 右键 → 选项 配置";
+        });
+      } else {
         banner.removeAttribute("hidden");
         banner.className = "env-banner";
-        banner.innerHTML = "环境问题：<br>" + issues.map(function (i) { return "  " + i; }).join("<br>");
-        return;
+        banner.textContent = "Obsidian 未配置 — 抓取成功后可下载 Markdown 文件 | 右键 → 选项 配置";
       }
-      BOC.obsidian.testConnection(
-        chrome.runtime.sendMessage.bind(chrome.runtime),
-        settings.obsidianApiBaseUrl,
-        settings.obsidianApiKey
-      ).then(function () {
-        banner.removeAttribute("hidden");
-        banner.className = "env-banner ok";
-        banner.textContent = "Obsidian 连接正常 | " + settings.noteFolder;
-      }).catch(function () {
-        banner.removeAttribute("hidden");
-        banner.className = "env-banner";
-        banner.textContent = "无法连接 Obsidian";
-      });
     });
   }
 
@@ -76,26 +73,65 @@
   }
 
   function resolveFavoriteSource() {
-    var match = state.sourceInput.match(/ml(\d+)/);
-    if (!match) {
-      var num = parseInt(state.sourceInput, 10);
-      if (!isNaN(num) && num > 0) { match = [null, String(num)]; }
+    var input = state.sourceInput.trim();
+    var mediaId = "";
+
+    // Format 1: medialist/detail/ml{id}  https://www.bilibili.com/medialist/detail/ml88854277
+    var mlMatch = input.match(/ml(\d+)/);
+    if (mlMatch) {
+      mediaId = mlMatch[1];
     }
-    if (!match) {
-      showSourceStatus("无法识别收藏夹 ID。请粘贴完整收藏夹页面 URL", "error");
+
+    // Format 2: favlist?fid={id}  https://space.bilibili.com/{mid}/favlist?fid={id}&ftype=create
+    if (!mediaId) {
+      var fidMatch = input.match(/[?&]fid=(\d+)/);
+      var midMatch = input.match(/space\.bilibili\.com\/(\d+)/);
+      if (fidMatch) {
+        var fid = fidMatch[1];
+        // media_id formula: fid * 100 + last_two_digits_of_mid
+        // But sometimes fid IS already the media_id. Try both approaches.
+        if (midMatch) {
+          var mid = midMatch[1];
+          mediaId = fid + mid.slice(-2);
+        }
+        // Also try fid directly as fallback
+        state._favlistFid = fid;
+        state._favlistMid = midMatch ? midMatch[1] : "";
+      }
+    }
+
+    // Format 3: Plain number
+    if (!mediaId) {
+      var num = parseInt(input, 10);
+      if (!isNaN(num) && num > 10000) { mediaId = String(num); }
+    }
+
+    if (!mediaId) {
+      showSourceStatus("无法识别收藏夹 ID。请粘贴完整收藏夹页面 URL（支持 medialist 和 favlist 格式）", "error");
       return;
     }
-    var mediaId = match[1];
+
     state.sourceData = { mediaId: mediaId };
-    fetchFavoritePages(mediaId, 1, []);
+    showSourceStatus("正在获取收藏夹内容 (ID: " + mediaId + ")...", "loading");
+    fetchFavoritePages(mediaId, 1, [], function (resultCount) {
+      // If 0 results and we have a favlist fid, try alternative media_id
+      if (resultCount === 0 && state._favlistFid) {
+        var altId = state._favlistFid; // Try fid directly
+        showSourceStatus("首试无结果，尝试备用ID: " + altId + "...", "loading");
+        state.sourceData.mediaId = altId;
+        fetchFavoritePages(altId, 1, []);
+        return;
+      }
+    });
   }
 
-  function fetchFavoritePages(mediaId, page, allMedias) {
+  function fetchFavoritePages(mediaId, page, allMedias, onDone) {
     var url = "https://api.bilibili.com/medialist/gateway/base/spaceDetail" +
       "?media_id=" + mediaId + "&pn=" + page + "&ps=20&order=mtime&type=0&tid=0&jsonp=jsonp";
 
     chrome.runtime.sendMessage({ type: "fetch-json", url: url }, function (resp) {
       if (!resp || !resp.ok) {
+        if (onDone) { onDone(-1); return; }
         showSourceStatus("获取收藏夹失败（请确认收藏夹是公开的）", "error");
         return;
       }
@@ -103,10 +139,21 @@
       var medias = (data && data.data && data.data.medias) || [];
       allMedias = allMedias.concat(medias);
 
-      var hasMore = data && data.data && data.data.has_more;
+      var pageData = data && data.data;
+      var hasMore = pageData && (pageData.has_more === true);
+      // Also check: if total_count > pages fetched so far
+      var totalCount = (pageData && pageData.total_count) || (pageData && pageData.info && pageData.info.media_count) || 0;
+      if (!hasMore && totalCount > 0) {
+        hasMore = allMedias.length < totalCount;
+      }
       if (hasMore && page < 50) {
-        BOC.utils.sleep(400).then(function () { fetchFavoritePages(mediaId, page + 1, allMedias); });
+        showSourceStatus("正在获取收藏夹内容... (第" + page + "页, 已获取" + allMedias.length + "/" + totalCount + ")", "loading");
+        BOC.utils.sleep(400).then(function () { fetchFavoritePages(mediaId, page + 1, allMedias, onDone); });
       } else {
+        if (allMedias.length === 0 && onDone) {
+          onDone(0);
+          return;
+        }
         state.allVideos = allMedias.map(normalizeFavoriteItem);
         showSourceStatus("收藏夹: 找到 " + state.allVideos.length + " 个视频", "success");
         enableNextStep();
@@ -153,7 +200,9 @@
         enableNextStep();
       })
       .catch(function (error) {
-        showSourceStatus("获取失败: " + BOC.utils.getErrorMessage(error) + "（请确认UID正确，且视频可公开访问）", "error");
+        var raw = String(error.message || error);
+        console.error("[BiliVault] Space API error:", raw);
+        showSourceStatus("获取失败: " + raw.substring(0, 200), "error");
       });
   }
 
@@ -361,16 +410,28 @@
           }
           var filepath = folder + "/" + filename;
 
-          return BOC.obsidian.writeNote(
-            chrome.runtime.sendMessage.bind(chrome.runtime),
-            state.settings.obsidianApiBaseUrl,
-            state.settings.obsidianApiKey,
-            filepath,
-            markdown
-          ).then(function () {
+          var writeStep;
+          if (state.obsidianAvailable) {
+            writeStep = BOC.obsidian.writeNote(
+              chrome.runtime.sendMessage.bind(chrome.runtime),
+              state.settings.obsidianApiBaseUrl,
+              state.settings.obsidianApiKey,
+              filepath,
+              markdown
+            );
+          } else {
+            // Obsidian not configured — mark as completed, content is valid
+            writeStep = Promise.resolve();
+          }
+
+          return writeStep.then(function () {
             state.completed++;
             state.newFileCount++;
-            logProgress("OK: " + video.title, "log-ok");
+            if (state.obsidianAvailable) {
+              logProgress("OK: " + video.title + " → Obsidian", "log-ok");
+            } else {
+              logProgress("OK: " + video.title + " (字幕已获取)", "log-ok");
+            }
             updateProgress();
             return scheduleNext();
           });
@@ -412,10 +473,20 @@
     state.step = "complete";
     state.active = false;
     showStep("complete");
+
+    var successLabel = state.obsidianAvailable ? "成功写入 Obsidian" : "成功提取字幕";
+    var hint = state.obsidianAvailable ? "" :
+      "<p style=\"color:#888;font-size:13px;margin-top:8px;\">配置 Obsidian 后可自动写入 vault。当前字幕已验证可抓取。</p>";
+
     document.getElementById("complete-report").innerHTML =
-      "<p>成功写入 Obsidian: <strong>" + state.completed + "</strong> 个</p>" +
+      "<p>" + successLabel + ": <strong>" + state.completed + "</strong> 个</p>" +
       "<p>跳过（无字幕/校验失败）: <strong>" + state.skipped + "</strong> 个</p>" +
-      "<p>失败: <strong>" + state.failed + "</strong> 个</p>";
+      "<p>失败: <strong>" + state.failed + "</strong> 个</p>" + hint;
+
+    // Show retry button only if there are failures
+    var retryBtn = document.getElementById("complete-retry-btn");
+    retryBtn.style.display = state.failed > 0 ? "" : "none";
+
     showCompilationGap();
   }
 
@@ -500,7 +571,15 @@
       finishExecution();
     });
 
-    document.getElementById("complete-close-btn").addEventListener("click", function () { window.close(); });
+    document.getElementById("complete-close-btn").addEventListener("click", function () {
+      // Reset and go back to source selection
+      state.allVideos = [];
+      state.filteredVideos = [];
+      state.taskQueue = [];
+      state.completed = 0; state.skipped = 0; state.failed = 0;
+      state.sourceType = null;
+      showStep("source");
+    });
     document.getElementById("complete-retry-btn").addEventListener("click", function () {
       state.taskQueue = state.filteredVideos.slice();
       state.completed = 0; state.skipped = 0; state.failed = 0;

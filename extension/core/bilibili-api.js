@@ -334,7 +334,7 @@ BOC.api._fetchWbiKeys = function (fetchFn) {
 
   return fetchFn("https://api.bilibili.com/x/web-interface/nav").then(function (payload) {
     var data = payload && payload.data;
-    if (!data) { throw new Error("Failed to fetch WBI keys — nav API returned no data"); }
+    if (!data) { throw new Error("Failed to fetch WBI keys — nav API returned no data. code=" + (payload && payload.code)); }
 
     var wbiImg = data.wbi_img || {};
     var imgUrl = String(wbiImg.img_url || "");
@@ -343,7 +343,14 @@ BOC.api._fetchWbiKeys = function (fetchFn) {
     var imgKey = imgUrl.split("/").pop().replace(/\.png$/, "");
     var subKey = subUrl.split("/").pop().replace(/\.png$/, "");
 
-    if (!imgKey || !subKey) { throw new Error("Failed to extract WBI keys from nav response"); }
+    if (!imgKey || !subKey) {
+      throw new Error(
+        "Failed to extract WBI keys. img=" + (imgKey || "EMPTY") +
+        " sub=" + (subKey || "EMPTY") +
+        " imgUrl=" + imgUrl.substring(Math.max(0, imgUrl.length - 30)) +
+        " subUrl=" + subUrl.substring(Math.max(0, subUrl.length - 30))
+      );
+    }
 
     BOC.api._wbiKeyCache = {
       imgKey: imgKey,
@@ -408,7 +415,8 @@ BOC.api._fetchSpaceVideos = function (uid, fetchFn, opts) {
         mid: uid,
         pn: String(page),
         ps: String(ps),
-        order: order
+        order: order,
+        platform: "web"
       };
       if (tid > 0) { params.tid = String(tid); }
 
@@ -417,7 +425,9 @@ BOC.api._fetchSpaceVideos = function (uid, fetchFn, opts) {
 
       return fetchFn(url).then(function (payload) {
         if (payload.code !== 0) {
-          throw new Error(BOC.utils.toReadableText(payload && payload.message, "获取UP主视频列表失败"));
+          var msg = BOC.utils.toReadableText(payload && payload.message, "");
+          var code = payload && payload.code;
+          throw new Error((msg || "获取失败") + " (code: " + code + ")");
         }
         var data = payload.data || {};
         var list = (data.list && data.list.vlist) || [];

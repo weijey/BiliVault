@@ -11,9 +11,9 @@
     }
   },
 
-  "permissions": ["storage", "scripting"],
+  "permissions": ["storage", "scripting", "cookies"],
   "host_permissions": [
-    "https://www.bilibili.com/*",
+    "https://*.bilibili.com/*",
     "https://api.bilibili.com/*",
     "https://*.hdslb.com/*",
     "http://127.0.0.1/*",
@@ -45,9 +45,9 @@
         "core/markdown-builder.js",
         "core/obsidian-client.js",
         "core/subtitle-cache.js",
-        "content/content.js"
+        "content.js"
       ],
-      "css": ["content/content.css"],
+      "css": ["content.css"],
       "run_at": "document_idle"
     }
   ],
