@@ -597,16 +597,16 @@
         '<button id="source-resolve-btn" class="btn-primary" style="margin-top:8px;">解析收藏夹</button>';
     } else if (preset === "space") {
       detail.innerHTML =
-        '<label>UP主主页链接 或 UID</label>' +
+        '<label for="source-input">UP主主页链接 或 UID</label>' +
         '<input type="text" id="source-input" placeholder="https://space.bilibili.com/243917657" />' +
         '<div class="space-options" style="display:flex;gap:12px;margin-top:12px;">' +
-        '<div style="flex:1"><label style="font-size:13px;color:#888;">排序</label>' +
+        '<div style="flex:1"><label for="space-order" style="font-size:13px;color:#888;">排序</label>' +
         '<select id="space-order" class="filter-number" style="width:100%;background:#0f3460;border:1px solid #333;border-radius:6px;color:#e0e0e0;padding:8px;">' +
         '<option value="pubdate">最新发布</option>' +
         '<option value="click">最多播放</option>' +
         '<option value="stow">最多收藏</option>' +
         '</select></div>' +
-        '<div style="flex:1"><label style="font-size:13px;color:#888;">数量</label>' +
+        '<div style="flex:1"><label for="space-count" style="font-size:13px;color:#888;">数量</label>' +
         '<input type="number" id="space-count" class="filter-number" style="width:100%;" value="50" min="1" max="200" />' +
         '</div></div>' +
         '<button id="source-resolve-btn" class="btn-primary" style="margin-top:8px;">获取视频列表</button>';
